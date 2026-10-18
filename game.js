@@ -521,9 +521,100 @@ const painter = new Painter(canvas, world, CELL_SCALE);
 // Floor so sand has something to pile on.
 for (let x = 0; x < world.w; x++) world.set(x, world.h - 1, MAT.WALL);
 
-function loop() {
-  sim.step();
+// ---- UI wiring -------------------------------------------------------------
+
+// Palette definition: id, label, swatch colour.
+const PALETTE = [
+  { mat: MAT.SAND, name: "Sand" },
+  { mat: MAT.WATER, name: "Water" },
+  { mat: MAT.OIL, name: "Oil" },
+  { mat: MAT.FIRE, name: "Fire" },
+  { mat: MAT.ACID, name: "Acid" },
+  { mat: MAT.PLANT, name: "Plant" },
+  { mat: MAT.STONE, name: "Stone" },
+  { mat: MAT.WALL, name: "Wall" },
+  { mat: MAT.EMPTY, name: "Eraser" },
+];
+
+const paletteEl = document.getElementById("palette");
+const matButtons = [];
+for (const item of PALETTE) {
+  const btn = document.createElement("button");
+  btn.className = "mat" + (item.mat === painter.material ? " active" : "");
+  const [r, g, b] = COLORS[item.mat];
+  btn.innerHTML =
+    `<span class="swatch" style="background:rgb(${r},${g},${b})"></span>` + item.name;
+  btn.addEventListener("click", () => {
+    painter.material = item.mat;
+    for (const b2 of matButtons) b2.classList.remove("active");
+    btn.classList.add("active");
+  });
+  paletteEl.appendChild(btn);
+  matButtons.push(btn);
+}
+
+const brush = document.getElementById("brush");
+const brushVal = document.getElementById("brushVal");
+brush.addEventListener("input", () => {
+  painter.brush = Number(brush.value);
+  brushVal.textContent = brush.value;
+});
+
+let paused = false;
+const pauseBtn = document.getElementById("pause");
+pauseBtn.addEventListener("click", () => {
+  paused = !paused;
+  pauseBtn.textContent = paused ? "▶ Play" : "⏸ Pause";
+});
+
+document.getElementById("clear").addEventListener("click", () => {
+  world.clear();
+  for (let x = 0; x < world.w; x++) world.set(x, world.h - 1, MAT.WALL);
+});
+
+// Keyboard: space toggles pause, number keys pick materials.
+window.addEventListener("keydown", (e) => {
+  if (e.code === "Space") {
+    e.preventDefault();
+    pauseBtn.click();
+  } else if (e.key >= "1" && e.key <= "9") {
+    const idx = Number(e.key) - 1;
+    if (matButtons[idx]) matButtons[idx].click();
+  }
+});
+
+// ---- HUD + main loop -------------------------------------------------------
+
+const fpsEl = document.getElementById("fps");
+const countEl = document.getElementById("count");
+let lastTime = performance.now();
+let fpsSmoothed = 60;
+let hudTimer = 0;
+
+function countParticles() {
+  let n = 0;
+  const cells = world.cells;
+  for (let i = 0; i < cells.length; i++) {
+    const m = cells[i];
+    if (m !== MAT.EMPTY && m !== MAT.WALL) n++;
+  }
+  return n;
+}
+
+function loop(now) {
+  const dt = now - lastTime;
+  lastTime = now;
+  fpsSmoothed = fpsSmoothed * 0.9 + (1000 / Math.max(dt, 1)) * 0.1;
+
+  if (!paused) sim.step();
   renderer.draw();
+
+  hudTimer += dt;
+  if (hudTimer > 250) {
+    hudTimer = 0;
+    fpsEl.textContent = Math.round(fpsSmoothed) + " fps";
+    countEl.textContent = countParticles().toLocaleString() + " particles";
+  }
   requestAnimationFrame(loop);
 }
 requestAnimationFrame(loop);

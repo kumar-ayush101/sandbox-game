@@ -8,8 +8,39 @@
   </head>
   <body>
     <div id="app">
-      <h1>Sandbox</h1>
-      <canvas id="world"></canvas>
+      <header class="topbar">
+        <div class="brand">
+          <span class="logo">▦</span>
+          <div>
+            <h1>Sandbox</h1>
+            <p class="sub">a falling-sand physics playground · pure JS + Canvas</p>
+          </div>
+        </div>
+        <div class="hud">
+          <span id="fps">-- fps</span>
+          <span id="count">0 particles</span>
+        </div>
+      </header>
+
+      <div class="stage">
+        <canvas id="world"></canvas>
+      </div>
+
+      <section class="controls">
+        <div class="palette" id="palette"><!-- material buttons injected by JS --></div>
+
+        <div class="toolbar">
+          <label class="field">
+            Brush
+            <input id="brush" type="range" min="1" max="12" value="3" />
+            <span id="brushVal">3</span>
+          </label>
+          <button id="pause" class="btn">⏸ Pause</button>
+          <button id="clear" class="btn danger">Clear</button>
+        </div>
+
+        <p class="hint">Click and drag on the canvas to draw. Try dropping <b>fire</b> on <b>oil</b>, or <b>acid</b> on <b>stone</b>.</p>
+      </section>
     </div>
     <script src="game.js"></script>
   </body>
