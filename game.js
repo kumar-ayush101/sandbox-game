@@ -164,25 +164,60 @@ class Simulation {
       case MAT.SAND:
         this.updateSand(x, y);
         break;
+      case MAT.WATER:
+        this.updateWater(x, y);
+        break;
       // more materials added in later steps
     }
   }
 
-  // Sand: fall straight down, else slide diagonally into an empty cell.
+  // Sand: fall straight down (through water/empty), else slide diagonally.
   updateSand(x, y) {
     const w = this.world;
     if (y + 1 >= w.h) return;
-    if (w.get(x, y + 1) === MAT.EMPTY) {
-      w.swap(x, y, x, y + 1);
+    const below = w.get(x, y + 1);
+    if (below === MAT.EMPTY || below === MAT.WATER || below === MAT.OIL) {
+      w.swap(x, y, x, y + 1); // sand is denser, sinks through liquids
       return;
     }
-    // try diagonals (randomize order to avoid directional bias)
     const dir = Math.random() < 0.5 ? -1 : 1;
     for (const dx of [dir, -dir]) {
       const nx = x + dx;
-      if (w.inBounds(nx, y + 1) && w.get(nx, y + 1) === MAT.EMPTY && w.get(nx, y) === MAT.EMPTY) {
+      if (!w.inBounds(nx, y + 1)) continue;
+      const diag = w.get(nx, y + 1);
+      if ((diag === MAT.EMPTY || diag === MAT.WATER || diag === MAT.OIL) && w.get(nx, y) !== MAT.WALL) {
         w.swap(x, y, nx, y + 1);
         return;
+      }
+    }
+  }
+
+  // Water: fall, else flow diagonally down, else spread sideways to level out.
+  updateWater(x, y) {
+    const w = this.world;
+    if (y + 1 < w.h && w.get(x, y + 1) === MAT.EMPTY) {
+      w.swap(x, y, x, y + 1);
+      return;
+    }
+    const dir = Math.random() < 0.5 ? -1 : 1;
+    // diagonal down
+    for (const dx of [dir, -dir]) {
+      const nx = x + dx;
+      if (w.inBounds(nx, y + 1) && w.get(nx, y + 1) === MAT.EMPTY && w.get(nx, y) !== MAT.WALL) {
+        w.swap(x, y, nx, y + 1);
+        return;
+      }
+    }
+    // sideways spread (travel a few cells so water levels out quickly)
+    for (const dx of [dir, -dir]) {
+      for (let step = 1; step <= 4; step++) {
+        const nx = x + dx * step;
+        if (!w.inBounds(nx, y) || w.get(nx, y) !== MAT.EMPTY) break;
+        // only move into the farthest reachable empty cell
+        if (!w.inBounds(nx + dx, y) || w.get(nx + dx, y) !== MAT.EMPTY) {
+          w.swap(x, y, nx, y);
+          return;
+        }
       }
     }
   }
