@@ -188,6 +188,100 @@ class Simulation {
   }
 }
 
+// ---- Input / painting ------------------------------------------------------
+
+class Painter {
+  constructor(canvas, world, scale) {
+    this.canvas = canvas;
+    this.world = world;
+    this.scale = scale;
+    this.material = MAT.SAND;
+    this.brush = 3; // radius in cells
+    this.drawing = false;
+    this.last = null;
+
+    const pos = (e) => {
+      const rect = canvas.getBoundingClientRect();
+      const cx = e.clientX ?? (e.touches && e.touches[0].clientX);
+      const cy = e.clientY ?? (e.touches && e.touches[0].clientY);
+      const x = Math.floor(((cx - rect.left) / rect.width) * world.w);
+      const y = Math.floor(((cy - rect.top) / rect.height) * world.h);
+      return { x, y };
+    };
+
+    const start = (e) => {
+      this.drawing = true;
+      const p = pos(e);
+      this.paint(p.x, p.y);
+      this.last = p;
+      e.preventDefault();
+    };
+    const move = (e) => {
+      if (!this.drawing) return;
+      const p = pos(e);
+      // interpolate between last and current so fast drags leave no gaps
+      if (this.last) this.line(this.last.x, this.last.y, p.x, p.y);
+      else this.paint(p.x, p.y);
+      this.last = p;
+      e.preventDefault();
+    };
+    const end = () => {
+      this.drawing = false;
+      this.last = null;
+    };
+
+    canvas.addEventListener("mousedown", start);
+    canvas.addEventListener("mousemove", move);
+    window.addEventListener("mouseup", end);
+    canvas.addEventListener("touchstart", start, { passive: false });
+    canvas.addEventListener("touchmove", move, { passive: false });
+    window.addEventListener("touchend", end);
+  }
+
+  // Stamp a filled circle of the current material around (cx, cy).
+  paint(cx, cy) {
+    const w = this.world;
+    const r = this.brush;
+    for (let dy = -r; dy <= r; dy++) {
+      for (let dx = -r; dx <= r; dx++) {
+        if (dx * dx + dy * dy > r * r) continue;
+        const x = cx + dx;
+        const y = cy + dy;
+        if (!w.inBounds(x, y)) continue;
+        // Only draw over empty cells unless placing a solid, so you can layer.
+        const target = w.get(x, y);
+        if (this.material === MAT.EMPTY || target === MAT.EMPTY || this.material === MAT.WALL) {
+          w.set(x, y, this.material);
+        } else if (target !== MAT.WALL) {
+          w.set(x, y, this.material);
+        }
+      }
+    }
+  }
+
+  // Paint along a line (Bresenham) for smooth dragging.
+  line(x0, y0, x1, y1) {
+    const dx = Math.abs(x1 - x0);
+    const dy = Math.abs(y1 - y0);
+    const sx = x0 < x1 ? 1 : -1;
+    const sy = y0 < y1 ? 1 : -1;
+    let err = dx - dy;
+    for (;;) {
+      this.paint(x0, y0);
+      if (x0 === x1 && y0 === y1) break;
+      const e2 = 2 * err;
+      if (e2 > -dy) {
+        err -= dy;
+        x0 += sx;
+      }
+      if (e2 < dx) {
+        err += dx;
+        y0 += sy;
+      }
+    }
+  }
+}
+
 // ---- Bootstrap -------------------------------------------------------------
 
 const CELL_SCALE = 4;
@@ -195,15 +289,10 @@ const canvas = document.getElementById("world");
 const world = new World(200, 150);
 const renderer = new Renderer(canvas, world, CELL_SCALE);
 const sim = new Simulation(world);
+const painter = new Painter(canvas, world, CELL_SCALE);
 
-// A little demo content so the first load isn't blank: a wall floor and some
-// sand falling onto it.
+// Floor so sand has something to pile on.
 for (let x = 0; x < world.w; x++) world.set(x, world.h - 1, MAT.WALL);
-for (let i = 0; i < 1200; i++) {
-  const x = (Math.random() * world.w) | 0;
-  const y = (Math.random() * (world.h / 3)) | 0;
-  world.set(x, y, MAT.SAND);
-}
 
 function loop() {
   sim.step();
