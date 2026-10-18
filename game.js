@@ -42,6 +42,14 @@ const COLORS = {
   [MAT.STONE]: [120, 120, 128],
 };
 
+// 4-directional neighbour offsets (up, down, left, right).
+const NEIGHBORS = [
+  [0, -1],
+  [0, 1],
+  [-1, 0],
+  [1, 0],
+];
+
 // ---- World -----------------------------------------------------------------
 
 class World {
@@ -167,6 +175,12 @@ class Simulation {
       case MAT.WATER:
         this.updateWater(x, y);
         break;
+      case MAT.FIRE:
+        this.updateFire(x, y);
+        break;
+      case MAT.SMOKE:
+        this.updateSmoke(x, y);
+        break;
       // more materials added in later steps
     }
   }
@@ -220,6 +234,86 @@ class Simulation {
         }
       }
     }
+  }
+
+  // Fire: short-lived. It ignites flammable neighbours, is doused by water,
+  // rises/flickers, and decays into smoke (or nothing) when its life runs out.
+  updateFire(x, y) {
+    const w = this.world;
+    const i = w.idx(x, y);
+
+    // age the flame
+    w.life[i]++;
+    const maxLife = 40 + (w.tint[i] % 20);
+
+    // doused by adjacent water?
+    if (this.hasNeighbor(x, y, MAT.WATER)) {
+      w.set(x, y, MAT.SMOKE);
+      return;
+    }
+
+    // ignite flammable neighbours
+    for (const [dx, dy] of NEIGHBORS) {
+      const nx = x + dx;
+      const ny = y + dy;
+      if (!w.inBounds(nx, ny)) continue;
+      const m = w.get(nx, ny);
+      if ((m === MAT.OIL || m === MAT.PLANT) && Math.random() < 0.35) {
+        w.set(nx, ny, MAT.FIRE);
+      }
+    }
+
+    // burn out
+    if (w.life[i] > maxLife) {
+      // leave smoke most of the time, else clear
+      w.set(x, y, Math.random() < 0.7 ? MAT.SMOKE : MAT.EMPTY);
+      return;
+    }
+
+    // flicker upward: try to rise into empty/smoke above
+    if (y - 1 >= 0) {
+      const up = w.get(x, y - 1);
+      if (up === MAT.EMPTY && Math.random() < 0.4) {
+        w.swap(x, y, x, y - 1);
+        return;
+      }
+    }
+  }
+
+  // Smoke: rises, drifts sideways, and fades out over time.
+  updateSmoke(x, y) {
+    const w = this.world;
+    const i = w.idx(x, y);
+    w.life[i]++;
+    if (w.life[i] > 120 + (w.tint[i] % 40)) {
+      w.set(x, y, MAT.EMPTY);
+      return;
+    }
+    if (y - 1 >= 0) {
+      const up = w.get(x, y - 1);
+      if (up === MAT.EMPTY) {
+        w.swap(x, y, x, y - 1);
+        return;
+      }
+      // drift diagonally up
+      const dir = Math.random() < 0.5 ? -1 : 1;
+      for (const dx of [dir, -dir]) {
+        const nx = x + dx;
+        if (w.inBounds(nx, y - 1) && w.get(nx, y - 1) === MAT.EMPTY) {
+          w.swap(x, y, nx, y - 1);
+          return;
+        }
+      }
+    }
+  }
+
+  hasNeighbor(x, y, mat) {
+    for (const [dx, dy] of NEIGHBORS) {
+      const nx = x + dx;
+      const ny = y + dy;
+      if (this.world.inBounds(nx, ny) && this.world.get(nx, ny) === mat) return true;
+    }
+    return false;
   }
 }
 
