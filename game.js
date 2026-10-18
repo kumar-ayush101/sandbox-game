@@ -181,7 +181,16 @@ class Simulation {
       case MAT.SMOKE:
         this.updateSmoke(x, y);
         break;
-      // more materials added in later steps
+      case MAT.OIL:
+        this.updateOil(x, y);
+        break;
+      case MAT.ACID:
+        this.updateAcid(x, y);
+        break;
+      case MAT.PLANT:
+        this.updatePlant(x, y);
+        break;
+      // STONE and WALL are static — no update.
     }
   }
 
@@ -314,6 +323,95 @@ class Simulation {
       if (this.world.inBounds(nx, ny) && this.world.get(nx, ny) === mat) return true;
     }
     return false;
+  }
+
+  // Oil: a liquid like water but lighter — it floats on water (so if water is
+  // below, oil rises above it). It is flammable (handled by fire's ignition).
+  updateOil(x, y) {
+    const w = this.world;
+    // float above water: if water is directly below, swap up
+    if (y + 1 < w.h && w.get(x, y + 1) === MAT.WATER && Math.random() < 0.3) {
+      w.swap(x, y, x, y + 1);
+      return;
+    }
+    if (y + 1 < w.h && w.get(x, y + 1) === MAT.EMPTY) {
+      w.swap(x, y, x, y + 1);
+      return;
+    }
+    const dir = Math.random() < 0.5 ? -1 : 1;
+    for (const dx of [dir, -dir]) {
+      const nx = x + dx;
+      if (w.inBounds(nx, y + 1) && w.get(nx, y + 1) === MAT.EMPTY && w.get(nx, y) !== MAT.WALL) {
+        w.swap(x, y, nx, y + 1);
+        return;
+      }
+    }
+    for (const dx of [dir, -dir]) {
+      const nx = x + dx;
+      if (w.inBounds(nx, y) && w.get(nx, y) === MAT.EMPTY) {
+        w.swap(x, y, nx, y);
+        return;
+      }
+    }
+  }
+
+  // Acid: a corrosive liquid. It falls like water, and with some probability
+  // dissolves a solid it touches (sand, stone, plant, wall), consuming itself.
+  updateAcid(x, y) {
+    const w = this.world;
+    // try to corrode a neighbour
+    for (const [dx, dy] of NEIGHBORS) {
+      const nx = x + dx;
+      const ny = y + dy;
+      if (!w.inBounds(nx, ny)) continue;
+      const m = w.get(nx, ny);
+      if (m === MAT.SAND || m === MAT.STONE || m === MAT.PLANT || m === MAT.WALL) {
+        if (Math.random() < 0.08) {
+          w.set(nx, ny, MAT.EMPTY); // dissolved
+          if (Math.random() < 0.5) {
+            w.set(x, y, MAT.EMPTY); // acid used up
+            return;
+          }
+        }
+      }
+    }
+    // fall / spread like a liquid
+    if (y + 1 < w.h && w.get(x, y + 1) === MAT.EMPTY) {
+      w.swap(x, y, x, y + 1);
+      return;
+    }
+    const dir = Math.random() < 0.5 ? -1 : 1;
+    for (const dx of [dir, -dir]) {
+      const nx = x + dx;
+      if (w.inBounds(nx, y + 1) && w.get(nx, y + 1) === MAT.EMPTY) {
+        w.swap(x, y, nx, y + 1);
+        return;
+      }
+    }
+    for (const dx of [dir, -dir]) {
+      const nx = x + dx;
+      if (w.inBounds(nx, y) && w.get(nx, y) === MAT.EMPTY) {
+        w.swap(x, y, nx, y);
+        return;
+      }
+    }
+  }
+
+  // Plant: static, but grows into adjacent water (slowly turning water to
+  // plant). Flammable — fire spreads through it. This creates vines that
+  // creep across water surfaces.
+  updatePlant(x, y) {
+    const w = this.world;
+    if (Math.random() < 0.04) {
+      for (const [dx, dy] of NEIGHBORS) {
+        const nx = x + dx;
+        const ny = y + dy;
+        if (w.inBounds(nx, ny) && w.get(nx, ny) === MAT.WATER) {
+          w.set(nx, ny, MAT.PLANT);
+          return;
+        }
+      }
+    }
   }
 }
 
