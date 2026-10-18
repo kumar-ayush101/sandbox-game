@@ -124,15 +124,41 @@ class Renderer {
     const { world, image } = this;
     const data = image.data;
     const cells = world.cells;
+    const life = world.life;
+    const flick = (this.frameCount = (this.frameCount || 0) + 1);
     for (let i = 0; i < cells.length; i++) {
       const mat = cells[i];
-      const base = COLORS[mat];
-      // apply a small per-cell tint for texture
-      const t = world.tint[i] - 16;
       const p = i * 4;
-      data[p] = clamp(base[0] + t);
-      data[p + 1] = clamp(base[1] + t);
-      data[p + 2] = clamp(base[2] + t);
+      let r, g, b;
+
+      if (mat === MAT.FIRE) {
+        // Fire glows hotter (whiter/yellower) when young, dims to red as it
+        // ages, with a per-cell flicker.
+        const age = life[i];
+        const heat = Math.max(0, 1 - age / 50);
+        const f = ((world.tint[i] + flick) % 16) - 8;
+        r = clamp(235 + f);
+        g = clamp(90 + heat * 110 + f);
+        b = clamp(20 + heat * 40);
+      } else if (mat === MAT.SMOKE) {
+        // Smoke fades (gets darker/translucent-looking) as it ages.
+        const age = life[i];
+        const fade = Math.max(0, 1 - age / 160);
+        const v = 40 + fade * 40;
+        r = v;
+        g = v;
+        b = clamp(v + 6);
+      } else {
+        const base = COLORS[mat];
+        const t = world.tint[i] - 16;
+        r = clamp(base[0] + t);
+        g = clamp(base[1] + t);
+        b = clamp(base[2] + t);
+      }
+
+      data[p] = r;
+      data[p + 1] = g;
+      data[p + 2] = b;
       data[p + 3] = 255;
     }
     this.ctx.putImageData(image, 0, 0);
